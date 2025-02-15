@@ -87,5 +87,4 @@ router.get('/notificaciones/:usuarioId', auth, async (req, res) => {
   }
 });
 
-
 module.exports = router;
