@@ -9,7 +9,7 @@ const mongoose = require('mongoose');
 const auth = require('../middleware/auth');  // Importar el middleware
 
 // Crear usuario
-router.post('/crear_usuario', async (req, res) => {
+router.post('/crear_usuario', auth, async (req, res) => {
     try {
         const { telefono, nombre, contraseña, perfil, departamento } = req.body;
 
@@ -74,17 +74,18 @@ router.post('/login', async (req, res) => {
 
 // Rutas protegidas con autenticación
 router.get('/notificaciones/:usuarioId', auth, async (req, res) => {
-    try {
-        const usuarioId = req.params.usuarioId;
-        if (!mongoose.Types.ObjectId.isValid(usuarioId)) {
-            return res.status(400).json({ message: 'ID de usuario no válido' });
-        }
-        const notificaciones = await Notificacion.find({ usuario: usuarioId, leida: false });
-        res.json(notificaciones);
-    } catch (error) {
-        console.error('Error al obtener las notificaciones:', error);
-        res.status(500).json({ message: 'Error al obtener las notificaciones' });
-    }
+  try {
+      const usuarioId = req.params.usuarioId;  // ID de usuario de la URL
+      if (!mongoose.Types.ObjectId.isValid(usuarioId)) {
+          return res.status(400).json({ message: 'ID de usuario no válido' });
+      }
+      const notificaciones = await Notificacion.find({ usuario: usuarioId, leida: false });
+      res.json(notificaciones);
+  } catch (error) {
+      console.error('Error al obtener las notificaciones:', error);
+      res.status(500).json({ message: 'Error al obtener las notificaciones' });
+  }
 });
+
 
 module.exports = router;
