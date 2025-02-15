@@ -65,7 +65,7 @@ router.post('/login', async (req, res) => {
         // Generar el token con duración de 3 horas
         const token = jwt.sign({ id: usuario._id, perfil: usuario.perfil }, process.env.JWT_SECRET, { expiresIn: '3h' });
 
-        res.status(200).json({ message: 'Login exitoso', token });
+        res.status(200).json({ message: 'Login exitoso', token ,perfil: usuario.perfil, userId: usuario._id});
     } catch (error) {
         console.error('Error al iniciar sesión:', error);
         res.status(500).json({ message: 'Error al iniciar sesión' });
