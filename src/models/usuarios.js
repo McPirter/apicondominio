@@ -7,9 +7,10 @@ const UsuarioSchema = new mongoose.Schema({
   perfil: {
     type: String,
     enum: ['Administrador', 'Jefe', 'Usuario'],
-    default: 'Usuario', // Predeterminado
+    default: 'Usuario',
   },
-  departamento: { type: mongoose.Schema.Types.ObjectId, ref: 'Departamento', default: null }, // Relación con Departamento
+  departamento: { type: mongoose.Schema.Types.ObjectId, ref: 'Departamento', default: null },
+  tokens: [{ token: String, createdAt: { type: Date, default: Date.now } }] // Lista de tokens
 }, {
   timestamps: true,
 });
