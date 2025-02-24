@@ -163,5 +163,28 @@ router.post('/logoutAll', auth, async (req, res) => {
     }
 });
 
+router.get('/verificar_token', auth, async (req, res) => {
+    try {
+        // Buscar el usuario con el token activo
+        const usuario = await Usuario.findOne({ _id: req.usuario._id, 'tokens.token': req.token });
+
+        if (!usuario) {
+            return res.status(401).json({ message: 'Token inválido o expirado' });
+        }
+
+        res.status(200).json({
+            message: 'Token válido',
+            usuario: {
+                id: usuario._id,
+                nombre: usuario.nombre,
+                perfil: usuario.perfil,
+            }
+        });
+    } catch (error) {
+        console.error('Error al verificar el token:', error);
+        res.status(500).json({ message: 'Error al verificar el token' });
+    }
+});
+
 
 module.exports = router;
