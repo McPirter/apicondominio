@@ -185,6 +185,131 @@ router.get('/verificar_token', auth, async (req, res) => {
         res.status(500).json({ message: 'Error al verificar el token' });
     }
 });
+//whasa
+const axios = require('axios'); // Para enviar la solicitud a WhatsApp
+
+router.post('/recuperar', async (req, res) => {
+    try {
+        const { telefono } = req.body;
+
+        if (!telefono) {
+            return res.status(400).json({ message: 'El teléfono es obligatorio' });
+        }
+
+        // Eliminar el prefijo +52 si existe
+        const telefonoSinPrefijo = telefono.startsWith('52') ? telefono.slice(2) : telefono;
+
+        // Buscar el usuario sin el prefijo +52
+        const usuario = await Usuario.findOne({ telefono: telefonoSinPrefijo });
+        if (!usuario) {
+            return res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+
+        // Generar token de recuperación (válido por 1 hora)
+        const tokenRecuperacion = jwt.sign(
+            { id: usuario._id, telefono: usuario.telefono },
+            process.env.JWT_SECRET,
+            { expiresIn: '1h' }
+        );
+
+        // Guardar el token en la base de datos
+        usuario.token_recuperacion = tokenRecuperacion;
+        await usuario.save();
+
+        // Añadir el prefijo +52 para el mensaje de WhatsApp
+        const telefonoConPrefijo = `+52${usuario.telefono}`;
+
+        // Enviar mensaje por WhatsApp con el token
+        const urlRecuperacion = `https://condominiogray.vercel.app/usuario/recuperar_contra/${tokenRecuperacion}`;
+
+        await axios.post('https://graph.facebook.com/v22.0/537341229471562/messages', {
+            messaging_product: "whatsapp",
+            to: telefonoConPrefijo,  // Enviar con +52
+            type: "template",
+            template: {
+                name: "recuperacion",
+                language: { code: "es_MX" },
+                components: [
+                    {
+                        type: "button",
+                        sub_type: "url",
+                        index: "0",
+                        parameters: [{ type: "text", text: urlRecuperacion }]
+                    }
+                ]
+            }
+        }, {
+            headers: {
+                'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        res.status(200).json({ message: 'Token de recuperación enviado por WhatsApp' });
+    } catch (error) {
+        console.error('Error en la recuperación:', error);
+        res.status(500).json({ message: 'Error al generar token de recuperación' });
+    }
+});
+
+router.post('/validar_token_recuperacion', async (req, res) => {
+    try {
+        const { token } = req.body;
+
+        if (!token) {
+            return res.status(400).json({ message: 'El token es obligatorio' });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const usuario = await Usuario.findById(decoded.id);
+
+        if (!usuario || usuario.token_recuperacion !== token) {
+            return res.status(401).json({ message: 'Token inválido o expirado' });
+        }
+
+        res.status(200).json({ message: 'Token válido', userId: usuario._id });
+    } catch (error) {
+        res.status(401).json({ message: 'Token inválido o expirado' });
+    }
+});
+
+// Ruta para cambiar contraseña con token de recuperación
+router.post('/cambiar_contra_recuperacion', async (req, res) => {
+    try {
+        const { token, nuevaContraseña } = req.body;
+
+        if (!token || !nuevaContraseña) {
+            return res.status(400).json({ message: 'Todos los campos son obligatorios' });
+        }
+
+        // Verificar el token
+        let payload;
+        try {
+            payload = jwt.verify(token, process.env.JWT_SECRET);
+        } catch (error) {
+            return res.status(400).json({ message: 'Token inválido o expirado' });
+        }
+
+        // Buscar al usuario por ID y validar el token de recuperación
+        const usuario = await Usuario.findById(payload.id);
+        if (!usuario || usuario.token_recuperacion !== token) {
+            return res.status(400).json({ message: 'Token no válido' });
+        }
+
+        // Hashear la nueva contraseña
+        usuario.contraseña = await bcrypt.hash(nuevaContraseña, 10);
+
+        // Eliminar el token de recuperación después del uso
+        usuario.token_recuperacion = null;
+
+        await usuario.save();
+
+        res.status(200).json({ message: 'Contraseña cambiada exitosamente' });
+    } catch (error) {
+        console.error('Error al cambiar contraseña por recuperación:', error);
+        res.status(500).json({ message: 'Error al cambiar contraseña' });
+    }
+});
 
 
 module.exports = router;
