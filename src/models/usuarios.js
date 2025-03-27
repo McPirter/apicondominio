@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const UsuarioSchema = new mongoose.Schema({
   telefono: { type: String, required: true, unique: true },
+  correo: { type: String, required: true, unique: true }, // Nuevo campo de correo
   nombre: { type: String, required: true },
   contraseña: { type: String, required: true },
   perfil: { type: String, enum: ['Administrador', 'Jefe', 'Usuario'], default: 'Usuario' },

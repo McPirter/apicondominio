@@ -188,6 +188,8 @@ router.get('/verificar_token', auth, async (req, res) => {
 //whasa
 const axios = require('axios'); // Para enviar la solicitud a WhatsApp
 
+const nodemailer = require('nodemailer');
+
 router.post('/recuperar', async (req, res) => {
     try {
         const { telefono } = req.body;
@@ -196,18 +198,15 @@ router.post('/recuperar', async (req, res) => {
             return res.status(400).json({ message: 'El teléfono es obligatorio' });
         }
 
-        // Eliminar el prefijo +52 si existe
-        const telefonoSinPrefijo = telefono.startsWith('52') ? telefono.slice(2) : telefono;
-
-        // Buscar el usuario sin el prefijo +52
-        const usuario = await Usuario.findOne({ telefono: telefonoSinPrefijo });
+        // Buscar el usuario por número de teléfono
+        const usuario = await Usuario.findOne({ telefono });
         if (!usuario) {
             return res.status(404).json({ message: 'Usuario no encontrado' });
         }
 
         // Generar token de recuperación (válido por 1 hora)
         const tokenRecuperacion = jwt.sign(
-            { id: usuario._id, telefono: usuario.telefono },
+            { id: usuario._id, correo: usuario.correo },
             process.env.JWT_SECRET,
             { expiresIn: '1h' }
         );
@@ -216,41 +215,42 @@ router.post('/recuperar', async (req, res) => {
         usuario.token_recuperacion = tokenRecuperacion;
         await usuario.save();
 
-        // Añadir el prefijo +52 para el mensaje de WhatsApp
-        const telefonoConPrefijo = `+52${usuario.telefono}`;
+        // Enlace para restablecer la contraseña
+        const urlRecuperacion = `https://condominio-gray.vercel.app/usuario/recuperar_contra/${tokenRecuperacion}`;
 
-        // Enviar mensaje por WhatsApp con el token
-        const urlRecuperacion = `https://condominiogray.vercel.app/usuario/recuperar_contra/${tokenRecuperacion}`;
-
-        await axios.post('https://graph.facebook.com/v22.0/537341229471562/messages', {
-            messaging_product: "whatsapp",
-            to: telefonoConPrefijo,  // Enviar con +52
-            type: "template",
-            template: {
-                name: "recuperacion",
-                language: { code: "es_MX" },
-                components: [
-                    {
-                        type: "button",
-                        sub_type: "url",
-                        index: "0",
-                        parameters: [{ type: "text", text: urlRecuperacion }]
-                    }
-                ]
-            }
-        }, {
-            headers: {
-                'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-                'Content-Type': 'application/json'
-            }
+        // Configurar Nodemailer
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+            },
         });
 
-        res.status(200).json({ message: 'Token de recuperación enviado por WhatsApp' });
+        // Configurar el correo
+        const mailOptions = {
+            from: `"Soporte" <${process.env.EMAIL_USER}>`,
+            to: usuario.correo, // Se usa el correo asociado al teléfono
+            subject: 'Recuperación de contraseña',
+            html: `
+                <p>Hola ${usuario.nombre},</p>
+                <p>Hemos recibido una solicitud para restablecer tu contraseña. Haz clic en el siguiente enlace para restablecerla:</p>
+                <a href="${urlRecuperacion}" target="_blank">Restablecer contraseña</a>
+                <p>Este enlace es válido por 1 hora.</p>
+                <p>Si no solicitaste este cambio, ignora este mensaje.</p>
+            `,
+        };
+
+        // Enviar el correo
+        await transporter.sendMail(mailOptions);
+
+        res.status(200).json({ message: 'Token de recuperación enviado al correo registrado' });
     } catch (error) {
         console.error('Error en la recuperación:', error);
         res.status(500).json({ message: 'Error al generar token de recuperación' });
     }
 });
+
 
 router.post('/validar_token_recuperacion', async (req, res) => {
     try {
